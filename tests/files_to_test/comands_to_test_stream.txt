@@ -1,0 +1,39 @@
+--Test chat solo texto
+curl -N -X POST http://localhost:8000/chat-stream ^
+More?   -H "Content-Type: application/json" ^
+More?   -d "{\"prompt\":\"¿Dónde consigo el formulario para licencia?\",\"user_id\":\"test_user\",\"session_id\":\"streaming01\"}"
+
+--Test chat con media
+Files:
+- Imagen_texto_corto.txt
+
+$base64data = Get-Content .\Imagen_texto_corto.txt
+$body = @{
+    prompt = "¿Qué ves en esta imagen?"
+    user_id = "stream_user"
+    session_id = "archivostream01"
+    filename = "Imagen_texto_corto.png"
+    base64_file = $base64data
+} | ConvertTo-Json -Compress
+
+Invoke-WebRequest -Uri "http://localhost:8000/chat-stream" `
+    -Method POST `
+    -Body $body `
+    -ContentType "application/json"
+
+-- Test chat con media y MCP
+
+# Prompt que activa búsqueda en MCP
+$consulta = @{
+    prompt = "¿Qué dice el MCP sobre texto dstinto?"
+    user_id = "tester"
+    session_id = "demo123"
+} | ConvertTo-Json
+
+# Enviar POST al agente
+Invoke-RestMethod -Uri "http://localhost:8000/chat" -Method Post `
+    -ContentType "application/json" -Body $consulta
+
+
+
+

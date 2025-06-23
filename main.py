@@ -7,6 +7,8 @@ from hypercorn.config import Config
 from app.api.agent_routes import setup_routes
 from sqlmodel import SQLModel
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
+from app.db.database import engine
+from app.db.database import create_pgvector_index  
 
 # Cargar .env
 load_dotenv()
@@ -26,6 +28,10 @@ setup_routes(app)
 async def on_start():
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
+
+    await create_pgvector_index()
+    print("✅ Base de datos inicializada y pgvector index asegurado.")
+
 
 @app.on_stop
 async def on_stop():
