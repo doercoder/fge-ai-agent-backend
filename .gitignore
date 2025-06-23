@@ -1,0 +1,51 @@
+# Entorno virtual
+venv/
+.env
+.env.*
+
+# Archivos y carpetas de Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+
+# Archivos de logs
+*.log
+
+# VSCode
+.vscode/
+
+# Datos temporales
+*.sqlite3
+*.db
+.DS_Store
+
+# Docker
+*.pid
+*.sock
+*.tar
+*.img
+docker-compose.override.yml
+
+# OS / Thumbnails / Indexado
+Thumbs.db
+ehthumbs.db
+Icon?
+Desktop.ini
+
+# Archivos generados
+dist/
+build/
+*.egg-info/
+
+# PyInstaller
+*.spec
+
+# pipenv, poetry
+Pipfile
+Pipfile.lock
+poetry.lock
+
+# MacOS
+.DS_Store
