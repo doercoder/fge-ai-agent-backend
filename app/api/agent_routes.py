@@ -138,7 +138,7 @@ def setup_routes(app):
 
         sql = text("""
             SELECT filename, content, path, created_at,
-                  embedding_pg <#> :query_vector AS distance
+            embedding_pg <#> :query_vector AS distance
             FROM mcpdocument
             ORDER BY distance ASC
             LIMIT :top_k
@@ -190,9 +190,9 @@ def setup_routes(app):
         async def stream_tokens():
             start = time.perf_counter()
             collected = ""
-            async for token in agent.stream_responder(full_prompt, session_id=session_id):
+            async for token in agent.stream_responder(full_prompt, session_id=session_id, filename=filename, base64_file=base64_file):
                 collected += token
-                yield f"data: {token}\n\n".encode("utf-8")
+                yield token.encode("utf-8")
 
             await save_session(user_id, session_id, full_prompt, collected)
             latency_ms = (time.perf_counter() - start) * 1000
@@ -202,7 +202,7 @@ def setup_routes(app):
             content=StreamedContent(b"text/event-stream", stream_tokens)
         )
     
-    @get("/metrics/latencia")
+    @get("/metrics/latency")
     async def get_latency_metrics(request: Request) -> Response:
         endpoint = request.query.get("endpoint", ["/chat"])[0]
         metrics = await obtener_metricas_latencia(endpoint)
@@ -210,3 +210,7 @@ def setup_routes(app):
             200,
             content=Content(b"application/json", json.dumps(metrics).encode("utf-8"))
         )
+
+    @get("/test-cors")
+    async def test_cors():
+        return Response(200, content=Content(b"text/plain", b"CORS OK"))

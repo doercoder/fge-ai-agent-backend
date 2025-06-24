@@ -4,21 +4,25 @@ from agno.agent import Agent
 from agno.models.openrouter import OpenRouter
 from app.agent.tool_engine import ToolEngine
 from app.services.municipal_info_tool import MunicipalInfoTool
+from app.agent.tool_engine import TrashScheduleTool
+from app.agent.pothole_report_tool import PotholeReportTool
 from app.agent.structured_output import build_structured_output
+from app.agent.municipal_form_tool import MunicipalFormTool
 from app.db.database import async_session
 from app.db.models import McpDocument
 from app.services.embedding_service import generate_embedding
 from sqlalchemy import text
 import re
 
-
 class MomostenangoAgent:
     def __init__(self):
-        self.tools = [MunicipalInfoTool()]
+        self.tools = [MunicipalFormTool(),PotholeReportTool(),TrashScheduleTool()]
         self.tool_engine = ToolEngine(self.tools)
+        print(f"🧪 Tools cargadas: {[tool.name for tool in self.tools]}")
+
         self.agent = Agent(
             model=OpenRouter(
-                id="mistralai/mistral-7b-instruct:free",
+                id="qwen/qwen2.5-vl-32b-instruct:free",
                 api_key=os.getenv("OPENROUTER_API_KEY")
             )
         )
@@ -31,7 +35,10 @@ class MomostenangoAgent:
         return default
 
     def should_trigger_mcp_search(self, prompt: str) -> bool:
-        triggers = ["mcp", "repositorio", "documento", "ley", "reglamento"]
+        triggers = [
+            "mcp", "repositorio", "documento", "ley", "reglamento", "norma", "impuesto",
+            "obligación", "multa", "vehicular", "tránsito", "tributo", "tarifa"
+        ]
         return any(trigger in prompt.lower() for trigger in triggers)
 
     async def buscar_en_mcp(self, query: str, top_k: int = 4) -> str:
@@ -123,18 +130,37 @@ Con base en este contexto, responde de forma clara y útil.
                 "tools_called": list(used_tools)
             }
         )
-
-    async def stream_responder(self, prompt: str, session_id: str = "default") -> AsyncGenerator[str, None]:
+    async def stream_responder(self, prompt: str, session_id: str = "default", filename: str = None, base64_file: str = None) -> AsyncGenerator[str, None]:
         used_tools = set()
 
-        # Paso 1: Ejecutar tools antes del LLM
-        result = await self.tool_engine.run_tools_before_llm(prompt, used_tools)
+        context = {
+            "filename": filename,
+            "base64_file": base64_file,
+            "session_id": session_id
+        }
+        result = await self.tool_engine.run_tools_before_llm(prompt, used_tools, context=context)
+
         if result:
-            for token in result["text"]:
-                yield token
+            print("[STREAM DEBUG] Resultado final:", result)
+
+            import json
+
+            # 🔍 Desempaquetamos el structured_output completo
+            structured_output = result.get("structured_output", {})
+            structured = structured_output.get("structured")
+
+            response = {
+                "text": result["text"]
+            }
+
+            if structured:
+                response["structured"] = structured
+
+            yield f"data: {json.dumps(response)}\n\n"
             return
 
-        # Paso 1.5: Si es consulta al MCP, buscar contexto
+
+        # Sino es tool vamos a archivos
         if self.should_trigger_mcp_search(prompt):
             print("[AGENTE] Streaming con contexto MCP...")
             top_k = MomostenangoAgent.extraer_top_k(prompt)
@@ -152,9 +178,17 @@ Con base en este contexto, responde de forma clara y útil.
             run_response = await self.agent.arun(prompt, stream=True)
 
         # Paso 2: Emitir tokens del stream
+        previous = ""
         async for chunk in run_response:
             if chunk.content:
-                yield chunk.content
+                token = chunk.content
+
+                # Añadir espacio solo si el token no empieza en puntuación
+                if previous and not token.startswith((" ", ".", ",", "!", "?", ":", ";", "\n")):
+                    token = " " + token
+
+                yield token
+                previous = token
 
 
 

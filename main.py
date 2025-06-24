@@ -8,7 +8,12 @@ from app.api.agent_routes import setup_routes
 from sqlmodel import SQLModel
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
 from app.db.database import engine
-from app.db.database import create_pgvector_index  
+from app.db.database import create_pgvector_index
+from blacksheep.server.responses import Response
+from blacksheep.server import Application
+import os
+# from blacksheep.server.static_content import StaticFiles
+# from pathlib import Path
 
 # Cargar .env
 load_dotenv()
@@ -21,6 +26,16 @@ engine: AsyncEngine = create_async_engine(DATABASE_URL, echo=False)
 
 # Crear app BlackSheep
 app = Application()
+
+# ✅ Usar CORS integrado de BlackSheep
+app.use_cors(
+    allow_origins=["http://localhost:5173"],
+    allow_methods="*",
+    allow_headers="*",
+    allow_credentials=True,
+)
+
+
 setup_routes(app)
 
 # Crear tablas (solo si no existen)
@@ -31,7 +46,6 @@ async def on_start():
 
     await create_pgvector_index()
     print("✅ Base de datos inicializada y pgvector index asegurado.")
-
 
 @app.on_stop
 async def on_stop():

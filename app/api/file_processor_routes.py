@@ -14,46 +14,51 @@ from app.db.models import McpDocument
 from app.db.database import async_session
 from sqlmodel import select
 from sqlalchemy import text
+from blacksheep import get, Response
+from blacksheep.server.responses import file
+from pathlib import Path
+import mimetypes
 
-@post("/process")
-async def process_file(request: Request) -> Response:
-    body = await request.json()
-    filename = body.get("filename", "archivo.pdf").lower()
-    content_base64 = body.get("content_base64")
-    path = body.get("path", "root")  # 👈 nuevo
+FORMS_DIR = Path("data/forms").resolve()
+# @post("/process")
+# async def process_file(request: Request) -> Response:
+#     body = await request.json()
+#     filename = body.get("filename", "archivo.pdf").lower()
+#     content_base64 = body.get("content_base64")
+#     path = body.get("path", "root")  # 👈 nuevo
 
-    if not content_base64:
-        return Response(
-            400,
-            content=Content(b"application/json", json.dumps({"error": "Falta el contenido en base64."}).encode("utf-8"))
-        )
+#     if not content_base64:
+#         return Response(
+#             400,
+#             content=Content(b"application/json", json.dumps({"error": "Falta el contenido en base64."}).encode("utf-8"))
+#         )
 
-    try:
-        content = b64decode(content_base64)
+#     try:
+#         content = b64decode(content_base64)
 
-        if filename.endswith(".pdf"):
-            text = extract_text_from_pdf_bytes(content)
-        elif filename.endswith((".jpg", ".jpeg", ".png", ".bmp", ".tiff")):
-            text = extract_text_from_image_bytes(content)
-        else:
-            return Response(
-                415,
-                content=Content(b"application/json", json.dumps({"error": "Formato no soportado."}).encode("utf-8"))
-            )
+#         if filename.endswith(".pdf"):
+#             text = extract_text_from_pdf_bytes(content)
+#         elif filename.endswith((".jpg", ".jpeg", ".png", ".bmp", ".tiff")):
+#             text = extract_text_from_image_bytes(content)
+#         else:
+#             return Response(
+#                 415,
+#                 content=Content(b"application/json", json.dumps({"error": "Formato no soportado."}).encode("utf-8"))
+#             )
 
-        embedding = generate_embedding(text)
-        await save_mcp_document(filename, text, embedding, path)  # 👈 pasamos path
+#         embedding = generate_embedding(text)
+#         await save_mcp_document(filename, text, embedding, path)  # 👈 pasamos path
 
-        return Response(
-            200,
-            content=Content(b"application/json", json.dumps({ "text": text }).encode("utf-8"))
-        )
+#         return Response(
+#             200,
+#             content=Content(b"application/json", json.dumps({ "text": text }).encode("utf-8"))
+#         )
 
-    except Exception as e:
-        return Response(
-            500,
-            content=Content(b"application/json", json.dumps({ "error": str(e) }).encode("utf-8"))
-        )
+#     except Exception as e:
+#         return Response(
+#             500,
+#             content=Content(b"application/json", json.dumps({ "error": str(e) }).encode("utf-8"))
+#         )
 
 
 @post("/process-base64")
@@ -149,6 +154,18 @@ async def search_mcp_pgvector(request: Request) -> Response:
         b"application/json",
         json.dumps(payload).encode("utf-8")
     ))
+
+@get("/data/forms/{filename}")
+async def serve_form(filename: str):
+    file_path = FORMS_DIR / filename
+
+    if not file_path.exists():
+        return Response(404, content=b"Archivo no encontrado")
+
+    mime_type, _ = mimetypes.guess_type(file_path)
+    content_type = mime_type or "application/octet-stream"
+
+    return file(str(file_path), content_type)
 
 def setup_document_routes(app):
     # No se agrega nada manualmente

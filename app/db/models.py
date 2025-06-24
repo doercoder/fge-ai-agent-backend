@@ -1,9 +1,10 @@
 from sqlmodel import SQLModel, Field
-from typing import Optional
-from datetime import datetime
-from pgvector.sqlalchemy import Vector
-from sqlalchemy import Column
 from typing import Optional, List
+from datetime import datetime
+from sqlalchemy import Column
+from sqlalchemy.dialects.postgresql import JSON
+from pgvector.sqlalchemy import Vector
+
 
 class Document(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -33,3 +34,13 @@ class LatencyLog(SQLModel, table=True):
     endpoint: str
     duration_ms: float
     timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+
+class PotholeReport(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    tipo: str
+    ubicacion: str
+    prompt_original: str
+    filename: Optional[str] = None
+    etiquetas: Optional[List[str]] = Field(default=None, sa_column=Column(JSON))
