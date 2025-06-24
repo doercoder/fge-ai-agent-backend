@@ -1,0 +1,18 @@
+#Caso de uso 1
+🧑: ¿a que hora recolectan la basura en zona 1 de Momostenango?
+🤖: La recolección de basura en zona 1 es lunes y jueves a las 6:00 AM.
+#Caso de uso 2
+🧑: Quiero reportar un bache en 8av 14-23 zona 2 de Momostenango
+🤖: ✅ Tu reporte fue registrado con número **#14**, ubicado en: **Ubicación: 8av 14-23 zona 2 de Momostenango**.
+#Caso de uso 3
+🧑: Quisiera poder obtener el formulario de solicitud de poda
+🤖: Aquí tienes el formulario de poda.
+📎 Descargar Formulario de poda
+#Caso de uso 4
+🧑: ¿Cuál es el costo del impuesto vehicular?
+🤖: El costo del impuesto vehicular depende del tipo de vehículo: - **Vehículos particulares**: Q 150. 00 anuales - **V ehículos de uso comercial**: Q2 00.0 0 anuales - **Motoc icletas**: Q75. 00 anuales Estos mont os son válidos para el período 2024, según los documentos proporcionados. El pago debe realizarse durante los primeros tres meses del año (del 1 de enero al 31 de marzo). Si no se paga a tiempo, se aplic an recargos y multas, dependiendo del tiempo de retraso. Si necesitas más información o ayuda con el pago, puedes contactar la Oficina de At ención Tributaria de la Municipalidad de Momostenango al PBX: 772 1-55 55 ext. 12.
+#Caso de uso 5
+🧑: Necesito agendar una cita para trámite de identidad
+🤖: Para agendar una cita, necesito: fecha, hora.
+🧑: Necesito agendar una cita para trámite de identidad el jueves a las 11 a.m.
+🤖: Cita agendada para identidad el jueves a las 11 . ¡Gracias por usar el asistente municipal!

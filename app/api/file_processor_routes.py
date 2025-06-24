@@ -47,8 +47,7 @@ FORMS_DIR = Path("data/forms").resolve()
 #             )
 
 #         embedding = generate_embedding(text)
-#         await save_mcp_document(filename, text, embedding, path)  # 👈 pasamos path
-
+#         await save_mcp_document(filename, text, embedding, path) 
 #         return Response(
 #             200,
 #             content=Content(b"application/json", json.dumps({ "text": text }).encode("utf-8"))

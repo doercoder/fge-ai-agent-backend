@@ -11,12 +11,13 @@ from app.agent.municipal_form_tool import MunicipalFormTool
 from app.db.database import async_session
 from app.db.models import McpDocument
 from app.services.embedding_service import generate_embedding
+from app.agent.appointment_tool import AppointmentTool
 from sqlalchemy import text
 import re
 
 class MomostenangoAgent:
     def __init__(self):
-        self.tools = [MunicipalFormTool(),PotholeReportTool(),TrashScheduleTool()]
+        self.tools = [MunicipalFormTool(),PotholeReportTool(),TrashScheduleTool(),AppointmentTool()]
         self.tool_engine = ToolEngine(self.tools)
         print(f"🧪 Tools cargadas: {[tool.name for tool in self.tools]}")
 
@@ -78,7 +79,7 @@ class MomostenangoAgent:
                 extra={"topic": result["topic"], "confidence": 0.95, "tools_called": result["used"]}
             )
 
-        # Paso 1.5: Si el prompt parece una consulta al MCP
+        # Verificar si el prompt corresponde a una consulta MCP
         if self.should_trigger_mcp_search(prompt):
             print("[AGENTE] Activando búsqueda en MCP...")
             top_k = MomostenangoAgent.extraer_top_k(prompt)
@@ -145,7 +146,7 @@ Con base en este contexto, responde de forma clara y útil.
 
             import json
 
-            # 🔍 Desempaquetamos el structured_output completo
+            # Desempaquetamos el structured_output completo
             structured_output = result.get("structured_output", {})
             structured = structured_output.get("structured")
 
