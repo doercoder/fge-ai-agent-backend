@@ -14,6 +14,11 @@ from app.db.models import McpDocument
 import pickle
 from app.agent.tool_engine import combinar_prompt
 from blacksheep.contents import StreamedContent
+from sqlalchemy import text
+import json
+import time
+from app.services.metrics_service import log_latency
+from app.services.metrics_service import obtener_metricas_latencia
 
 agent = MomostenangoAgent()
 
@@ -50,9 +55,14 @@ def setup_routes(app):
             except Exception as e:
                 print(f"[CHAT] Error al procesar archivo base64: {str(e)}")
 
+        start = time.perf_counter() # para que veamos si sale o no optimizada esta madre, sus tiempos
+
         reply = await agent.responder(prompt, session_id=session_id)
 
         await save_session(user_id, session_id, prompt, reply.get("text", ""))
+
+        latency_ms = (time.perf_counter() - start) * 1000
+        await log_latency("/chat", latency_ms)
 
         return Response(
             200,
@@ -110,6 +120,10 @@ def setup_routes(app):
     @get("/mcp/search")
     async def search_mcp_documents(request: Request) -> Response:
         query = request.query.get("query")
+        top_k_raw = request.query.get("top_k", ["5"])
+        top_k = int(top_k_raw[0]) if isinstance(top_k_raw, list) else int(top_k_raw)
+
+
         if not query:
             return Response(
                 400,
@@ -119,29 +133,42 @@ def setup_routes(app):
                 )
             )
 
-
         query_embedding = generate_embedding(query)
+        vector_str = f"[{', '.join(map(str, query_embedding))}]"
+
+        sql = text("""
+            SELECT filename, content, path, created_at,
+                  embedding_pg <#> :query_vector AS distance
+            FROM mcpdocument
+            ORDER BY distance ASC
+            LIMIT :top_k
+        """)
 
         async with async_session() as session:
-            result = await session.execute(select(McpDocument))
-            docs = result.scalars().all()
+            result = await session.execute(sql, {
+                "query_vector": vector_str,
+                "top_k": top_k
+            })
+            rows = result.mappings().all()
 
-            results = []
-            for doc in docs:
-                if doc.embedding:
-                    doc_vector = pickle.loads(doc.embedding)
-                    score = cosine_similarity(query_embedding, doc_vector)
-                    results.append({
-                        "filename": doc.filename,
-                        "score": round(score, 4),
-                        "content_snippet": doc.content[:300]
-                    })
+        payload = [
+            {
+                "filename": row["filename"],
+                "score": round(1 - row["distance"], 4),
+                "path": row["path"],
+                "content_snippet": row["content"][:300],
+                "created_at": row["created_at"].isoformat()
+            }
+            for row in rows
+        ]
 
-            results.sort(key=lambda r: r["score"], reverse=True)
-            return Response(
-                200,
-                content=Content(b"application/json", json.dumps(results).encode("utf-8"))
+        return Response(
+            200,
+            content=Content(
+                b"application/json",
+                json.dumps(payload).encode("utf-8")
             )
+        )
 
     @post("/chat-stream")
     async def chat_stream(request: Request) -> Response:
@@ -161,14 +188,25 @@ def setup_routes(app):
         full_prompt = combinar_prompt(prompt, base64_file, filename)
 
         async def stream_tokens():
+            start = time.perf_counter()
             collected = ""
             async for token in agent.stream_responder(full_prompt, session_id=session_id):
                 collected += token
                 yield f"data: {token}\n\n".encode("utf-8")
 
             await save_session(user_id, session_id, full_prompt, collected)
-
+            latency_ms = (time.perf_counter() - start) * 1000
+            await log_latency("/chat-stream", latency_ms)
         return Response(
             200,
             content=StreamedContent(b"text/event-stream", stream_tokens)
+        )
+    
+    @get("/metrics/latencia")
+    async def get_latency_metrics(request: Request) -> Response:
+        endpoint = request.query.get("endpoint", ["/chat"])[0]
+        metrics = await obtener_metricas_latencia(endpoint)
+        return Response(
+            200,
+            content=Content(b"application/json", json.dumps(metrics).encode("utf-8"))
         )

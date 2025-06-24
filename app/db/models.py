@@ -28,3 +28,8 @@ class McpDocument(SQLModel, table=True):
     path: Optional[str] = Field(default="root")
     embedding_pg: Optional[List[float]] = Field(default=None, sa_column=Column(Vector(1536)))
 
+class LatencyLog(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    endpoint: str
+    duration_ms: float
+    timestamp: datetime = Field(default_factory=datetime.utcnow)

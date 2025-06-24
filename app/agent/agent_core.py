@@ -9,6 +9,7 @@ from app.db.database import async_session
 from app.db.models import McpDocument
 from app.services.embedding_service import generate_embedding
 from sqlalchemy import text
+import re
 
 
 class MomostenangoAgent:
@@ -21,6 +22,13 @@ class MomostenangoAgent:
                 api_key=os.getenv("OPENROUTER_API_KEY")
             )
         )
+    @staticmethod
+    def extraer_top_k(prompt: str, default: int = 4) -> int:
+        matches = re.findall(r"top[\s-]?(\d{1,2})", prompt.lower())
+        if matches:
+            k = int(matches[0])
+            return min(max(k, 1), 20)  # limita de 1 a 20 para seguridad
+        return default
 
     def should_trigger_mcp_search(self, prompt: str) -> bool:
         triggers = ["mcp", "repositorio", "documento", "ley", "reglamento"]
@@ -66,7 +74,8 @@ class MomostenangoAgent:
         # Paso 1.5: Si el prompt parece una consulta al MCP
         if self.should_trigger_mcp_search(prompt):
             print("[AGENTE] Activando búsqueda en MCP...")
-            context = await self.buscar_en_mcp(prompt)
+            top_k = MomostenangoAgent.extraer_top_k(prompt)
+            context = await self.buscar_en_mcp(prompt, top_k=top_k)
             contextual_prompt = f"""El usuario preguntó: "{prompt}"
 
 Aquí hay contexto recuperado desde el repositorio MCP:
@@ -128,7 +137,8 @@ Con base en este contexto, responde de forma clara y útil.
         # Paso 1.5: Si es consulta al MCP, buscar contexto
         if self.should_trigger_mcp_search(prompt):
             print("[AGENTE] Streaming con contexto MCP...")
-            context = await self.buscar_en_mcp(prompt)
+            top_k = MomostenangoAgent.extraer_top_k(prompt)
+            context = await self.buscar_en_mcp(prompt, top_k=top_k)
             contextual_prompt = f"""El usuario preguntó: "{prompt}"
 
 Aquí hay contexto recuperado desde el repositorio MCP:
@@ -145,3 +155,7 @@ Con base en este contexto, responde de forma clara y útil.
         async for chunk in run_response:
             if chunk.content:
                 yield chunk.content
+
+
+
+

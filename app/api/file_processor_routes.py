@@ -109,7 +109,7 @@ async def explore_dir():
         }
         for doc in docs
     ]
-
+# experimentando
 @get("/mcp/search-pgvector")
 async def search_mcp_pgvector(request: Request) -> Response:
     query = request.query.get("query")
