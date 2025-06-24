@@ -290,3 +290,69 @@ Define las tablas principales del sistema como clases SQLModel. Incluye:
 Este módulo proporciona la base para la trazabilidad, análisis de uso, reconstrucción de sesiones, almacenamiento de información indexada y métricas. Su diseño orientado a SQLModel + PgVector permite aprovechar lo mejor de la integración con LLMs sin comprometer el control sobre la estructura y queries.
 
 > Su simplicidad y adaptabilidad hacen de este módulo una base sólida para evolución futura, integraciones con otras fuentes, o migración hacia arquitecturas más complejas como event sourcing o almacenamiento híbrido.
+
+
+# Resumen de Decisiones Tecnológicas y Arquitectónicas
+
+Este documento resume las decisiones clave tomadas en el desarrollo del backend del agente AI multimodal para la Municipalidad de Momostenango. Estas elecciones reflejan un balance entre creatividad, rendimiento y seguridad, considerando además las limitaciones de tiempo y recursos de la etapa de prototipado.
+
+---
+
+## 🧠 Stack Tecnológico
+
+* **BlackSheep (ASGI)**: elegido por su rendimiento, compatibilidad con ASGI, y sintaxis clara. Permite streaming, uso de middlewares y tareas asincrónicas.
+* **SQLModel + PostgreSQL**: proporciona ORM moderno y flexible con acceso directo a SQL. Se eligió PostgreSQL por su soporte a `pgvector`.
+* **PgVector**: habilita búsquedas semánticas eficientes usando vectores, ideal para RAG y consultas a embeddings.
+* **OpenRouter (LLM provider)**: se configuró para usar modelos gratuitos con la etiqueta `:free`, cumpliendo la consigna de minimizar costos.
+* **OCR: PyMuPDF + Tesseract**: permite extracción multimodal de texto desde PDFs o imágenes, cubriendo el requisito de entradas complejas.
+
+---
+
+## 🧩 Arquitectura Modular
+
+* Cada componente está claramente separado en módulos:
+
+  * `agent`: razonamiento central
+  * `api`: rutas REST
+  * `services`: lógica de negocio
+  * `db`: conexión y modelos de datos
+* Esto favorece el testeo, la evolución por partes y una curva de aprendizaje rápida para nuevos desarrolladores.
+
+---
+
+## ⚙️ Decisiones de Rendimiento
+
+* **Latencia auditada**: se implementó un sistema propio de logging de latencias para cada endpoint. Esto permite verificar el cumplimiento del P95 < 800ms.
+* **Uso de stream en `/chat-stream`**: mejora la experiencia del usuario final y reduce la percepción de espera.
+* **Embeddings preprocesados**: documentos son vectorizados al almacenarse, lo que evita reprocesamiento innecesario.
+
+---
+
+## 🔐 Decisiones de Seguridad
+
+* Inputs validados manualmente en puntos clave (OCR, almacenamiento, sesiones).
+* Se priorizó un diseño simple que evita ejecuciones dinámicas o llamadas arbitrarias.
+* Aún así, se reconocen posibles mejoras:
+
+  * Validación de tipo MIME más estricta al subir archivos
+  * Límite de tamaño para campos como `base64_data`
+  * Sanitización sistemática de inputs (aunque no se ejecuta código desde ellos)
+
+> Se priorizó claridad y estabilidad antes que seguridad avanzada, dada la naturaleza de prototipo.
+
+---
+
+## 🧠 Escalabilidad y Futuro
+
+El diseño del sistema facilita:
+
+* Integración futura con orquestadores como **Agno** o sistemas como **Zep Memory**
+* Almacenamiento de archivos externo si se desea aligerar la base de datos
+* Incorporación de herramientas externas o APIs mediante MCP o function calling
+* Soporte para modos multi-agente, razonamiento jerárquico o chain-of-thought
+
+---
+
+## 💡 Conclusión
+
+El backend desarrollado equilibra simplicidad, potencia y claridad, siendo adecuado para un prototipo funcional con visión a largo plazo. Las decisiones tomadas aseguran compatibilidad con requisitos clave del enunciado sin comprometer mantenibilidad ni rendimiento.
