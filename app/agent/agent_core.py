@@ -1,8 +1,10 @@
+import base64
 import os
 from typing import AsyncGenerator
 from agno.agent import Agent
 from agno.models.openrouter import OpenRouter
 from app.agent.tool_engine import ToolEngine
+from app.services.file_processor import extract_text_from_image_bytes, extract_text_from_pdf_bytes
 from app.services.municipal_info_tool import MunicipalInfoTool
 from app.agent.tool_engine import TrashScheduleTool
 from app.agent.pothole_report_tool import PotholeReportTool
@@ -132,65 +134,74 @@ Con base en este contexto, responde de forma clara y útil.
             }
         )
     async def stream_responder(self, prompt: str, session_id: str = "default", filename: str = None, base64_file: str = None) -> AsyncGenerator[str, None]:
-        used_tools = set()
+            used_tools = set()
+            original_prompt = prompt
+            print("[DEBUG STREAM] filename:", filename)
+            print("[DEBUG STREAM] base64_file present:", bool(base64_file))
+            # 👇 Procesar archivo y enriquecer prompt
+            extracted_text = ""
+            if base64_file and filename:
+                try:
+                    raw_bytes = base64.b64decode(base64_file)
+                    if filename.lower().endswith(".pdf"):
+                        extracted_text = extract_text_from_pdf_bytes(raw_bytes)
+                    elif filename.lower().endswith((".jpg", ".jpeg", ".png", ".bmp", ".tiff")):
+                        extracted_text = extract_text_from_image_bytes(raw_bytes)
+                    
+                    print("[DEBUG STREAM] Texto extraído:", extracted_text[:200])  # NUEVO
 
-        context = {
-            "filename": filename,
-            "base64_file": base64_file,
-            "session_id": session_id
-        }
-        result = await self.tool_engine.run_tools_before_llm(prompt, used_tools, context=context)
+                    if extracted_text:
+                        prompt = f"Contenido visual: {extracted_text.strip()}\n\nUsuario dijo: {prompt}"
+                        print("[AGENTE STREAM] Prompt modificado con contenido visual.")
+                except Exception as e:
+                    print(f"[STREAM] Error al procesar archivo base64: {e}")
 
-        if result:
-            print("[STREAM DEBUG] Resultado final:", result)
 
-            import json
-
-            # Desempaquetamos el structured_output completo
-            structured_output = result.get("structured_output", {})
-            structured = structured_output.get("structured")
-
-            response = {
-                "text": result["text"]
+            # 🧪 Paso 1: ejecutar tools si corresponde
+            context = {
+                "filename": filename,
+                "base64_file": base64_file,
+                "session_id": session_id
             }
+            result = await self.tool_engine.run_tools_before_llm(prompt, used_tools, context=context)
 
-            if structured:
-                response["structured"] = structured
+            if result:
+                print("[STREAM DEBUG] Resultado final:", result)
+                import json
+                structured_output = result.get("structured_output", {})
+                structured = structured_output.get("structured")
+                response = {
+                    "text": result["text"]
+                }
+                if structured:
+                    response["structured"] = structured
+                yield f"data: {json.dumps(response)}\n\n"
+                return
 
-            yield f"data: {json.dumps(response)}\n\n"
-            return
+            # 🧪 Paso 2: buscar en MCP si aplica
+            if self.should_trigger_mcp_search(original_prompt):
+                print("[AGENTE] Streaming con contexto MCP...")
+                top_k = MomostenangoAgent.extraer_top_k(original_prompt)
+                context = await self.buscar_en_mcp(original_prompt, top_k=top_k)
+                contextual_prompt = f"""El usuario preguntó: "{original_prompt}"
 
+        Aquí hay contexto recuperado desde el repositorio MCP:
 
-        # Sino es tool vamos a archivos
-        if self.should_trigger_mcp_search(prompt):
-            print("[AGENTE] Streaming con contexto MCP...")
-            top_k = MomostenangoAgent.extraer_top_k(prompt)
-            context = await self.buscar_en_mcp(prompt, top_k=top_k)
-            contextual_prompt = f"""El usuario preguntó: "{prompt}"
+        {context}
 
-Aquí hay contexto recuperado desde el repositorio MCP:
+        Con base en este contexto, responde de forma clara y útil.
+        """
+                run_response = await self.agent.arun(contextual_prompt, stream=True)
+            else:
+                print("[AGENTE] Streaming con prompt final:", prompt)
+                run_response = await self.agent.arun(prompt, stream=True)
 
-{context}
-
-Con base en este contexto, responde de forma clara y útil.
-"""
-            run_response = await self.agent.arun(contextual_prompt, stream=True)
-        else:
-            run_response = await self.agent.arun(prompt, stream=True)
-
-        # Paso 2: Emitir tokens del stream
-        previous = ""
-        async for chunk in run_response:
-            if chunk.content:
-                token = chunk.content
-
-                # Añadir espacio solo si el token no empieza en puntuación
-                if previous and not token.startswith((" ", ".", ",", "!", "?", ":", ";", "\n")):
-                    token = " " + token
-
-                yield token
-                previous = token
-
-
-
-
+            # 🧪 Paso 3: emitir tokens uno a uno
+            previous = ""
+            async for chunk in run_response:
+                if chunk.content:
+                    token = chunk.content
+                    if previous and not token.startswith((" ", ".", ",", "!", "?", ":", ";", "\n")):
+                        token = " " + token
+                    yield token
+                    previous = token
